@@ -157,9 +157,10 @@ $tgl_lahir        = $_POST['tgl_lahir'] ?? '';
 $tgl = date('Y-m-d');     // untuk DB (DATE)
 $jam = date('H:i:s');     // untuk DB (TIME)
 
-// var_dump($tgl_lahir);
-// exit();
-
+// echo json_encode([
+//     'debug_post' => $_POST
+// ]);
+// exit;
 
 $umurdaftar = 0;
 $sttsumur   = 'Th';
@@ -307,7 +308,7 @@ if ($row = $result->fetch_assoc()) {
 }
 
 $no_rawat = $tglFormat . '/' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
-// var_dump($no_rawat);
+// var_dump($no_rkm_medis);
 // exit();
 
 // var_dump($no_rkm_medis);

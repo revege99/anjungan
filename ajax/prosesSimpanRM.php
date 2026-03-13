@@ -22,8 +22,8 @@ $nm_kec  = $_POST['nm_kec'] ?? '';
 $nm_kel  = $_POST['nm_kel'] ?? '';
 
 
-var_dump($_POST);
-exit;
+// var_dump($_POST);
+// exit;
 
 if ($nik == '' || $nama == '' || $tgl_lahir == '') {
     die("Data tidak lengkap");
@@ -39,7 +39,7 @@ $result = mysqli_query($conn, "SELECT MAX(no_rkm_medis) as max_rm FROM pasien");
 $row = mysqli_fetch_assoc($result);
 
 $last = $row['max_rm'];
-$new_rm = str_pad((int)$last + 1, 6, '0', STR_PAD_LEFT);
+$new_rm = str_pad((int)$last + 1, 8, '0', STR_PAD_LEFT);
 
 // var_dump($new_rm);
 // exit();

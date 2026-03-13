@@ -25,7 +25,7 @@ function cekPeserta() {
             }
 
             bpjsData = data.data; // <-- SIMPAN GLOBAL
-
+            console.log("BPJS DATA cek noka.js:", bpjsData);
             const p = bpjsData;
 
             const val = v => (!v || v === "") ? "-" : v;
@@ -85,15 +85,16 @@ function cekPeserta() {
                     form.action = 'ambilAntrian.php';
 
                     const fields = {
-                        nik: bpjsData.noKTP && bpjsData.noKTP.trim() !== ''
-                        ? bpjsData.noKTP
-                        : nomorInput,
-                        noka: bpjsData.noKartu ?? '',
-                        nama: bpjsData.nama ?? '',
-                        tgl_lahir: bpjsData.tglLahir ?? '',
-                        jk: bpjsData.sex ?? '',
-                        alamat: bpjsData.alamat ?? ''
-                    };
+                        nik: bpjsData.noKTP || '',
+                        noka: bpjsData.noKartu || '',
+                        nama: bpjsData.nama || '',
+                        tgl_lahir: bpjsData.tglLahir || '',
+                        jk: bpjsData.sex || '',
+                        alamat: bpjsData.alamat || '',
+                        no_hp: bpjsData.noHP || ''
+                        };
+                        console.log("BPJS DATA kirim to ambilantrian:", bpjsData);
+
 
                     Object.keys(fields).forEach(key => {
                         const input = document.createElement('input');

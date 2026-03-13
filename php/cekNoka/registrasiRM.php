@@ -1,10 +1,14 @@
 <?php
 $nik       = $_POST['nik'] ?? '';
-$noka      = $_POST['noka'] ?? '';
+$noka      = $_POST['noKartu'] ?? '';
 $nama      = $_POST['nama'] ?? '';
 $tgl_lahir = $_POST['tgl_lahir'] ?? '';
 $jk        = $_POST['jk'] ?? '';
 $alamat    = $_POST['alamat'] ?? '';
+// $no_hp     = $_POST['no_hp'] ?? '';
+
+// var_dump($_POST);
+// exit;
 
 if (!empty($tgl_lahir)) {
     $date = DateTime::createFromFormat('d-m-Y', $tgl_lahir);
