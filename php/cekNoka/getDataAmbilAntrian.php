@@ -218,7 +218,7 @@ function kirimPost(nik, noka, nama, tgl_lahir, jk, alamat) {
 
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = "http://localhost/anjungan/php/cekNoka/ambilAntrian.php";
+    form.action = "ambilAntrian.php";
 
     const data = {
         nik: nik,

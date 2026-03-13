@@ -15,22 +15,16 @@ $kd_kab  = $_POST['kd_kab']  ?? '';
 $kd_kec  = $_POST['kd_kec']  ?? '';
 $kd_kel  = $_POST['kd_kel']  ?? '';
 
-// $kd_prop = $_POST['kd_prop'] ?? '';
-// $kd_kab  = $_POST['kd_kab'] ?? '';
-// $kd_kec  = $_POST['kd_kec'] ?? '';
-// $kd_kel  = $_POST['kd_kel'] ?? '';
-
-// $kd_prop = "1";
-// $kd_kab  = "1";
-// $kd_kec  = "1";
-// $kd_kel  = "1";
 
 $nm_prop = $_POST['nm_prop'] ?? '';
 $nm_kab  = $_POST['nm_kab'] ?? '';
 $nm_kec  = $_POST['nm_kec'] ?? '';
 $nm_kel  = $_POST['nm_kel'] ?? '';
 
-// var_dump($noka);
+
+var_dump($_POST);
+exit;
+
 if ($nik == '' || $nama == '' || $tgl_lahir == '') {
     die("Data tidak lengkap");
 }
@@ -46,6 +40,9 @@ $row = mysqli_fetch_assoc($result);
 
 $last = $row['max_rm'];
 $new_rm = str_pad((int)$last + 1, 6, '0', STR_PAD_LEFT);
+
+// var_dump($new_rm);
+// exit();
 
 /*
 |--------------------------------------------------------------------------

@@ -55,119 +55,177 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 
     // LOAD PROVINSI
-    fetch(`${BASE_URL}/provinces.json`)
-        .then(r=>r.json())
-        .then(data=>{
-            prov.innerHTML = '<option value="">-- Pilih Provinsi --</option>';
-            data.forEach(p=>{
-                prov.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-            });
-        });
+    // =============================
+// LOAD PROVINSI
+// =============================
+fetch(`${BASE_URL}/provinces.json`)
+.then(r=>r.json())
+.then(data=>{
+    prov.innerHTML = '<option value="">-- Pilih Provinsi --</option>';
+    data.forEach(p=>{
+        prov.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+    });
+});
 
-        prov.addEventListener('change', async function () {
-            console.log('EVENT CHANGE PROVINSI FIRED');
-            if (!this.value) {
-                console.log('VALUE EMPTY → RETURN');
-                return;
-            }
+// =============================
+// PROVINSI
+// =============================
+prov.addEventListener('change', async function () {
 
-            const nama = this.options[this.selectedIndex].text;
+    console.log('EVENT CHANGE PROVINSI FIRED');
 
-            // simpan nama
-            nmProp.value = nama;
+    if (!this.value) {
+        console.log('VALUE EMPTY → RETURN');
+        return;
+    }
 
-            // 🔥 AUTO: lookup → jika tidak ada → PHP insert → return kd
-            db.kd_prop = await lookupKD('propinsi', nama);
+    const nama = this.options[this.selectedIndex].text;
 
-            console.log('AUTO INSERT PROVINSI');
-            console.log('Nama  :', nama);
-            console.log('KD DB :', db.kd_prop);
+    // simpan nama
+    nmProp.value = nama;
 
-            // reset child
-            reset(kab, '-- Loading Kabupaten --');
-            reset(kec, '-- Pilih Kabupaten --');
-            reset(kel, '-- Pilih Kecamatan --');
+    // lookup kd di database
+    db.kd_prop = await lookupKD('propinsi', nama);
 
-            // load EMSIFA kabupaten
-            const r = await fetch(`${BASE_URL}/regencies/${this.value}.json`);
-            const d = await r.json();
+    // simpan ke hidden input
+    dbProp.value = db.kd_prop;
 
-            kab.innerHTML = '<option value="">-- Pilih Kabupaten --</option>';
-            d.forEach(x =>
-                kab.innerHTML += `<option value="${x.id}">${x.name}</option>`
-            );
-            kab.disabled = false;
-        });
+    console.log('AUTO INSERT PROVINSI');
+    console.log('Nama  :', nama);
+    console.log('KD DB :', db.kd_prop);
 
-        kab.addEventListener('change', async function () {
-            console.log('EVENT CHANGE KABUPATEN FIRED');
+    // reset child
+    reset(kab,'-- Loading Kabupaten --');
+    reset(kec,'-- Pilih Kecamatan --');
+    reset(kel,'-- Pilih Kelurahan --');
 
-            if (!this.value) return;
+    dbKab.value = '';
+    dbKec.value = '';
+    dbKel.value = '';
 
-            const nama = this.options[this.selectedIndex].text;
+    nmKab.value = '';
+    nmKec.value = '';
+    nmKel.value = '';
 
-            nmKab.value = nama;
-            db.kd_kab  = await lookupKD('kabupaten', nama);
+    // load kabupaten dari API
+    const r = await fetch(`${BASE_URL}/regencies/${this.value}.json`);
+    const d = await r.json();
 
-            console.log('KABUPATEN');
-            console.log('Nama  :', nama);
-            console.log('KD DB :', db.kd_kab);
+    kab.innerHTML = '<option value="">-- Pilih Kabupaten --</option>';
 
-            reset(kec, '-- Loading Kecamatan --');
-            reset(kel, '-- Pilih Kecamatan --');
+    d.forEach(x=>{
+        kab.innerHTML += `<option value="${x.id}">${x.name}</option>`;
+    });
 
-            const r = await fetch(`${BASE_URL}/districts/${this.value}.json`);
-            const d = await r.json();
+    kab.disabled = false;
+});
 
-            kec.innerHTML = '<option value="">-- Pilih Kecamatan --</option>';
-            d.forEach(x =>
-                kec.innerHTML += `<option value="${x.id}">${x.name}</option>`
-            );
-            kec.disabled = false;
-        });
+// =============================
+// KABUPATEN
+// =============================
+kab.addEventListener('change', async function () {
 
-        kec.addEventListener('change', async function () {
-            console.log('EVENT CHANGE KECAMATAN FIRED');
+    console.log('EVENT CHANGE KABUPATEN FIRED');
 
-            if (!this.value) return;
+    if (!this.value) return;
 
-            const nama = this.options[this.selectedIndex].text;
+    const nama = this.options[this.selectedIndex].text;
 
-            nmKec.value = nama;
-            db.kd_kec  = await lookupKD('kecamatan', nama);
+    nmKab.value = nama;
 
-            console.log('KECAMATAN');
-            console.log('Nama  :', nama);
-            console.log('KD DB :', db.kd_kec);
+    db.kd_kab = await lookupKD('kabupaten', nama);
 
-            reset(kel, '-- Loading Kelurahan --');
+    dbKab.value = db.kd_kab;
 
-            const r = await fetch(`${BASE_URL}/villages/${this.value}.json`);
-            const d = await r.json();
+    console.log('KABUPATEN');
+    console.log('Nama  :', nama);
+    console.log('KD DB :', db.kd_kab);
 
-            kel.innerHTML = '<option value="">-- Pilih Kelurahan --</option>';
-            d.forEach(x =>
-                kel.innerHTML += `<option value="${x.id}">${x.name}</option>`
-            );
-            kel.disabled = false;
-        });
+    reset(kec,'-- Loading Kecamatan --');
+    reset(kel,'-- Pilih Kelurahan --');
 
-        kel.addEventListener('change', async function () {
-            console.log('EVENT CHANGE KELURAHAN FIRED');
+    dbKec.value = '';
+    dbKel.value = '';
 
-            if (!this.value) return;
+    nmKec.value = '';
+    nmKel.value = '';
 
-            const nama = this.options[this.selectedIndex].text;
+    const r = await fetch(`${BASE_URL}/districts/${this.value}.json`);
+    const d = await r.json();
 
-            nmKel.value = nama;
-            db.kd_kel  = await lookupKD('kelurahan', nama);
+    kec.innerHTML = '<option value="">-- Pilih Kecamatan --</option>';
 
-            console.log('KELURAHAN');
-            console.log('Nama  :', nama);
-            console.log('KD DB :', db.kd_kel);
-        });
+    d.forEach(x=>{
+        kec.innerHTML += `<option value="${x.id}">${x.name}</option>`;
+    });
 
-    const formRM = document.getElementById('formRM');
+    kec.disabled = false;
+});
+
+// =============================
+// KECAMATAN
+// =============================
+kec.addEventListener('change', async function () {
+
+    console.log('EVENT CHANGE KECAMATAN FIRED');
+
+    if (!this.value) return;
+
+    const nama = this.options[this.selectedIndex].text;
+
+    nmKec.value = nama;
+
+    db.kd_kec = await lookupKD('kecamatan', nama);
+
+    dbKec.value = db.kd_kec;
+
+    console.log('KECAMATAN');
+    console.log('Nama  :', nama);
+    console.log('KD DB :', db.kd_kec);
+
+    reset(kel,'-- Loading Kelurahan --');
+
+    dbKel.value = '';
+    nmKel.value = '';
+
+    const r = await fetch(`${BASE_URL}/villages/${this.value}.json`);
+    const d = await r.json();
+
+    kel.innerHTML = '<option value="">-- Pilih Kelurahan --</option>';
+
+    d.forEach(x=>{
+        kel.innerHTML += `<option value="${x.id}">${x.name}</option>`;
+    });
+
+    kel.disabled = false;
+});
+
+// =============================
+// KELURAHAN
+// =============================
+kel.addEventListener('change', async function () {
+
+    console.log('EVENT CHANGE KELURAHAN FIRED');
+
+    if (!this.value) return;
+
+    const nama = this.options[this.selectedIndex].text;
+
+    nmKel.value = nama;
+
+    db.kd_kel = await lookupKD('kelurahan', nama);
+
+    dbKel.value = db.kd_kel;
+
+    console.log('KELURAHAN');
+    console.log('Nama  :', nama);
+    console.log('KD DB :', db.kd_kel);
+});
+
+// =============================
+// FORM
+// =============================
+const formRM = document.getElementById('formRM');
 
 formRM.addEventListener('submit', function(e) {
 
@@ -185,6 +243,10 @@ formRM.addEventListener('submit', function(e) {
     }
 
     const formData = new FormData(this);
+
+    for (let pair of formData.entries()) {
+    console.log(pair[0], pair[1]);
+}
 
     fetch('../../ajax/prosesSimpanRM.php', {
         method: 'POST',

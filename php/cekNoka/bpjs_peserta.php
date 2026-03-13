@@ -63,10 +63,10 @@ if ($httpCode != 200) {
 
 $responseData = json_decode($response, true);
 
-if ($responseData['metaData']['code'] != 200) {
+if (!isset($responseData['metaData']) || $responseData['metaData']['code'] != 200) {
     echo json_encode([
         "status"=>false,
-        "message"=>$responseData['metaData']['message']
+        "message"=>$responseData['metaData']['message'] ?? "Response BPJS tidak valid"
     ]);
     exit;
 }
@@ -97,7 +97,29 @@ if ($original === null) {
     exit;
 }
 
+/*
+==============================
+PROSES NORMALISASI DATA
+==============================
+*/
+
+$peserta = json_decode($original, true);
+
+// Antisipasi jika BPJS tidak mengembalikan NIK
+if ($jenis === 'nik') {
+
+    if (
+        !isset($peserta['noKTP']) ||
+        $peserta['noKTP'] === '' ||
+        $peserta['noKTP'] === null ||
+        $peserta['noKTP'] === '-'
+    ) {
+        $peserta['noKTP'] = $nomor;
+    }
+
+}
+
 echo json_encode([
     "status" => true,
-    "data"   => json_decode($original, true)
+    "data"   => $peserta
 ]);
