@@ -1,6 +1,6 @@
 <?php
 $nik       = $_POST['nik'] ?? '';
-$noka      = $_POST['noKartu'] ?? '';
+$noka      = $_POST['noka'] ?? '';
 $nama      = $_POST['nama'] ?? '';
 $tgl_lahir = $_POST['tgl_lahir'] ?? '';
 $jk        = $_POST['jk'] ?? '';
@@ -8,6 +8,7 @@ $alamat    = $_POST['alamat'] ?? '';
 // $no_hp     = $_POST['no_hp'] ?? '';
 
 // var_dump($_POST);
+// var_dump($noka);
 // exit;
 
 if (!empty($tgl_lahir)) {
@@ -17,8 +18,8 @@ if (!empty($tgl_lahir)) {
     }
 }
 
-// var_dump($jk);
-// exit();
+
+
 
 if ($nik == '' || $nama == '') {
     die('Akses tidak valid');

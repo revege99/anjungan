@@ -124,7 +124,7 @@ document.addEventListener('click', function (e) {
                     allowOutsideClick: false,
                     allowEscapeKey: false
                 }).then(() => {
-                    window.location.href = 'http://localhost/anjungan/';
+                    window.location.href = '/anjungan/';
                 });
             } else {
                 // ===============================
