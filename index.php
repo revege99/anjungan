@@ -168,7 +168,7 @@ body{
 <!-- FOOTER -->
 
 <div class="footer">
-© 2026 Klinik Santa Martina Sidikalang • Sistem Anjungan Mandiri
+Â© 2026 Klinik St Lucia Lintong â€” Sistem Anjungan Mandiri
 </div>
 
 </body>
