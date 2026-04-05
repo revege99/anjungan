@@ -168,7 +168,7 @@ body{
 <!-- FOOTER -->
 
 <div class="footer">
-© 2026 Klinik St Lucia Lintong — Sistem Anjungan Mandiri
+© 2026 Klinik Santa Lucia Lintong — Sistem Anjungan Mandiri
 </div>
 
 </body>
