@@ -1,234 +1,152 @@
 <?php
-$nik       = $_POST['nik'] ?? '';
-$noka      = $_POST['noka'] ?? '';
-$nama      = $_POST['nama'] ?? '';
-$tgl_lahir = $_POST['tgl_lahir'] ?? '';
-$jk        = $_POST['jk'] ?? '';
-$alamat    = $_POST['alamat'] ?? '';
-// $no_hp     = $_POST['no_hp'] ?? '';
+declare(strict_types=1);
 
-// var_dump($_POST);
-// var_dump($noka);
-// exit;
+require_once '../../function/app.php';
 
-if (!empty($tgl_lahir)) {
-    $date = DateTime::createFromFormat('d-m-Y', $tgl_lahir);
-    if ($date) {
-        $tgl_lahir = $date->format('Y-m-d');
-    }
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    header('Location: /anjungan/php/cekNoka/cekNoka.php');
+    exit;
 }
 
+$nik = trim((string) ($_POST['nik'] ?? ''));
+$noka = trim((string) ($_POST['noka'] ?? ''));
+$nama = trim((string) ($_POST['nama'] ?? ''));
+$tglLahir = anjungan_normalize_date(trim((string) ($_POST['tgl_lahir'] ?? '')));
+$jk = anjungan_normalize_gender(trim((string) ($_POST['jk'] ?? '')));
+$alamat = trim((string) ($_POST['alamat'] ?? ''));
+$noHp = trim((string) ($_POST['no_hp'] ?? ''));
 
-
-
-if ($nik == '' || $nama == '') {
-    die('Akses tidak valid');
+if ($nik === '' || $nama === '') {
+    header('Location: /anjungan/php/cekNoka/cekNoka.php');
+    exit;
 }
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <title>Registrasi Rekam Medis</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <style>
-        body {
-            background: linear-gradient(135deg, #0d6efd, #3a7bd5, #00d2ff);
-            min-height: 100vh;
-            font-family: 'Segoe UI', sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .glass-card {
-            background: rgba(255,255,255,0.15);
-            backdrop-filter: blur(15px);
-            border-radius: 28px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: #fff;
-            width: 100%;
-            max-width: 800px;
-        }
-
-        .glass-card h4 {
-            font-weight: 700;
-            letter-spacing: .5px;
-        }
-
-        .form-control, .form-select, textarea {
-            border-radius: 16px;
-            height: 55px;
-            border: none;
-            font-size: 1rem;
-        }
-
-        textarea.form-control {
-            height: auto;
-        }
-
-        .form-control:focus, .form-select:focus {
-            box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
-        }
-
-        .btn-modern {
-            height: 60px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: 20px;
-            transition: .3s ease;
-        }
-
-        .btn-modern:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(0,0,0,.3);
-        }
-
-        label {
-            font-weight: 500;
-            margin-bottom: 6px;
-        }
-
-        .header-section {
-            background: rgba(255,255,255,0.1);
-            border-radius: 20px 20px 0 0;
-            padding: 20px;
-            text-align: center;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Registrasi Rekam Medis</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link href="/anjungan/css/anjungan-theme.css" rel="stylesheet">
 </head>
-<body>
 
-<div class="glass-card shadow">
+<body class="app-shell">
 
-    <div class="header-section">
-        <h4>🩺 Registrasi Rekam Medis Pasien</h4>
-        <small>Lengkapi data berikut untuk membuat Rekam Medis</small>
+<div class="container shell-container page-narrow">
+    <div class="page-header">
+        <div>
+            <div class="eyebrow">
+                <span class="dot"></span>
+                Rekam Medis Baru
+            </div>
+            <h1 class="page-title">Lengkapi Rekam Medis</h1>
+            <p class="page-subtitle">Cek data, isi wilayah, lalu simpan.</p>
+        </div>
     </div>
 
-    <div class="p-4">
+    <section class="glass-panel panel-pad">
+        <form id="formRM" class="stack-gap">
+            <div class="soft-panel panel-pad">
+                <div class="panel-title">Identitas</div>
 
-        <form id="formRM">
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <label>NIK</label>
-                    <input type="text" name="nik" class="form-control"
-                           value="<?= htmlspecialchars($nik) ?>" readonly>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">NIK</label>
+                        <input type="text" name="nik" class="form-control" value="<?= anjungan_escape($nik) ?>" readonly>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">No. Kartu BPJS</label>
+                        <input type="text" name="noka" class="form-control" value="<?= anjungan_escape($noka) ?>" readonly>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Nama Lengkap</label>
+                        <input type="text" name="nama" class="form-control" value="<?= anjungan_escape($nama) ?>" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Tanggal Lahir</label>
+                        <input type="date" name="tgl_lahir" class="form-control" value="<?= anjungan_escape($tglLahir) ?>" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Jenis Kelamin</label>
+                        <select name="jk" class="form-select" required>
+                            <option value="">Pilih jenis kelamin</option>
+                            <option value="L" <?= $jk === 'L' ? 'selected' : '' ?>>Laki-laki</option>
+                            <option value="P" <?= $jk === 'P' ? 'selected' : '' ?>>Perempuan</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">No. HP</label>
+                        <input type="tel" name="no_hp" class="form-control" value="<?= anjungan_escape($noHp) ?>" placeholder="08xxxxxxxxxx" inputmode="numeric" required>
+                    </div>
                 </div>
+            </div>
 
-                <div class="col-md-6">
-                    <label>No Kartu BPJS</label>
-                    <input type="text" name="noka" class="form-control"
-                           value="<?= htmlspecialchars($noka) ?>" readonly>
+            <div class="soft-panel panel-pad">
+                <div class="panel-title">Alamat</div>
+
+                <input type="hidden" name="kd_prop" id="db_kd_prop">
+                <input type="hidden" name="kd_kab" id="db_kd_kab">
+                <input type="hidden" name="kd_kec" id="db_kd_kec">
+                <input type="hidden" name="kd_kel" id="db_kd_kel">
+
+                <input type="hidden" name="nm_prop" id="nm_prop">
+                <input type="hidden" name="nm_kab" id="nm_kab">
+                <input type="hidden" name="nm_kec" id="nm_kec">
+                <input type="hidden" name="nm_kel" id="nm_kel">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Provinsi</label>
+                        <select id="kd_prop" class="form-select" required>
+                            <option value="">Memuat daftar provinsi...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Kabupaten / Kota</label>
+                        <select id="kd_kab" class="form-select" required disabled>
+                            <option value="">Pilih provinsi</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Kecamatan</label>
+                        <select id="kd_kec" class="form-select" required disabled>
+                            <option value="">Pilih kabupaten</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Kelurahan</label>
+                        <select id="kd_kel" class="form-select" required disabled>
+                            <option value="">Pilih kecamatan</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Alamat Lengkap</label>
+                        <textarea name="alamat" class="form-control" required><?= anjungan_escape($alamat) ?></textarea>
+                    </div>
                 </div>
             </div>
 
-            <div class="mb-3">
-                <label>Nama Lengkap</label>
-                <input type="text" name="nama" class="form-control"
-                       value="<?= htmlspecialchars($nama) ?>" required>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <label>Tanggal Lahir</label>
-                    <input type="date" name="tgl_lahir" class="form-control"
-                           value="<?= htmlspecialchars($tgl_lahir) ?>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label>Jenis Kelamin</label>
-                    <select name="jk" class="form-select" required>
-                        <option value="">-- Pilih --</option>
-                        <option value="L" <?= $jk === 'L' ? 'selected' : '' ?>>Laki-laki</option>
-                        <option value="P" <?= $jk === 'P' ? 'selected' : '' ?>>Perempuan</option>
-                    </select>
-                </div>
-            </div>
-             <div class="">
-                <label>No HP</label>
-                <input type="tel" name="no_hp" class="form-control"
-                       placeholder="08xxxxxxxxxx" pattern="[0-9]{10,15}" required>
-            </div>
-
-            <div class="row g-3 mb-4">
-
-    <!-- PROVINSI -->
-                <div class="col-md-6">
-
-    <!-- Hidden Nama -->
-                    <input type="hidden" name="kd_prop" id="db_kd_prop">
-                    <input type="hidden" name="kd_kab"  id="db_kd_kab">
-                    <input type="hidden" name="kd_kec"  id="db_kd_kec">
-                    <input type="hidden" name="kd_kel"  id="db_kd_kel">
-
-                    <input type="hidden" name="nm_prop" id="nm_prop">
-                    <input type="hidden" name="nm_kab"  id="nm_kab">
-                    <input type="hidden" name="nm_kec"  id="nm_kec">
-                    <input type="hidden" name="nm_kel"  id="nm_kel">
-
-                    <label>Provinsi</label>
-                    <select id="kd_prop" class="form-select" required></select>
-                        <option value="">Loading Provinsi...</option>
-                    </select>
-                </div>
-
-                <!-- KABUPATEN -->
-                <div class="col-md-6">
-                    <label>Kabupaten / Kota</label>
-                    <select id="kd_kab"  class="form-select" required disabled>
-                        <option value="">-- Pilih Provinsi Terlebih Dahulu --</option>
-                    </select>
-                </div>
-
-                <!-- KECAMATAN -->
-                <div class="col-md-6">
-                    <label>Kecamatan</label>
-                    <select id="kd_kec"  class="form-select" required disabled>
-                        <option value="">-- Pilih Kabupaten Terlebih Dahulu --</option>
-                    </select>
-                </div>
-
-                <!-- KELURAHAN -->
-                <div class="col-md-6">
-                    <label>Kelurahan</label>
-                    <select id="kd_kel"  class="form-select" required disabled>
-                        <option value="">-- Pilih Kecamatan Terlebih Dahulu --</option>
-                    </select>
-                </div>
-
-                <!-- ALAMAT -->
-                <div class="col-12">
-                    <label>Alamat Lengkap</label>
-                    <textarea name="alamat" class="form-control" rows="3" required></textarea>
-                </div>
-
-            </div>
-
-           
-
-            <div class="d-flex justify-content-between gap-3">
-                <a href="javascript:history.back()" class="btn btn-light btn-modern w-50">
-                    ← Kembali
+            <div class="d-grid d-lg-flex gap-2">
+                <a href="javascript:history.back()" class="btn btn-anj-secondary flex-fill">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Kembali
                 </a>
-
-                <button type="submit" class="btn btn-success btn-modern w-50">
-                    💾 Simpan Rekam Medis
+                <button type="submit" class="btn btn-anj-primary flex-fill">
+                    <i class="bi bi-save me-2"></i>
+                    Simpan Rekam Medis
                 </button>
             </div>
-
         </form>
-
-    </div>
+    </section>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="/anjungan/js/registrasiRM.js"></script>
 
 </body>
 </html>
-
-<script src="../../js/registrasiRM.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

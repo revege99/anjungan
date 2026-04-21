@@ -1,10 +1,13 @@
 <?php
+declare(strict_types=1);
 
-$cons_id    = "13505";
-$secret_key = "9hQE24BFE8";
-$user_key   = "c8ccc3ecea6c9a667676a934147a1cfb";
+require_once __DIR__ . '/app.php';
 
-$base_url   = "https://apijkn.bpjs-kesehatan.go.id/pcare-rest/";
-$auth_user  = "0030B011";
-$auth_pass  = "Stmartina30#";
-$kd_aplikasi = "095";
+$cons_id = anjungan_env('BPJS_CONS_ID', '14494');
+$secret_key = anjungan_env('BPJS_SECRET_KEY', '6tXBDE443B');
+$user_key = anjungan_env('BPJS_USER_KEY', 'f9874c7a2cb354f832927ebdf95f6843');
+
+$base_url = rtrim((string) anjungan_env('BPJS_BASE_URL', 'https://apijkn.bpjs-kesehatan.go.id/pcare-rest/'), '/') . '/';
+$auth_user = anjungan_env('BPJS_AUTH_USER', 'Dedi.kristina');
+$auth_pass = anjungan_env('BPJS_AUTH_PASS', 'SintLucia@123');
+$kd_aplikasi = anjungan_env('BPJS_KD_APLIKASI', '095');

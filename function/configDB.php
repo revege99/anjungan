@@ -1,22 +1,11 @@
-<?php 
-$conn = mysqli_connect("localhost", "root", "s1ntluc14", "sik_tester_lintong");
+<?php
+declare(strict_types=1);
 
-// Cek koneksi
-if (!$conn) {
-    die("Koneksi gagal: " . mysqli_connect_error());
+require_once __DIR__ . '/app.php';
+
+$conn = anjungan_db();
+
+function query(string $query): array
+{
+    return anjungan_query($query);
 }
-
-// Fungsi untuk query biasa (mengembalikan array hasil)
-function query($query) {
-    global $conn;
-    $result = mysqli_query($conn, $query);
-    $rows = [];
-
-    while ($row = mysqli_fetch_assoc($result)) {
-        $rows[] = $row;
-    }
-    return $rows;
-}
-
-
- ?>

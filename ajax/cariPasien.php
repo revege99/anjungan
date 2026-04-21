@@ -1,453 +1,540 @@
 <?php
+declare(strict_types=1);
+
 require_once '../function/configDB.php';
 
-header('Content-Type: application/json');
+$mode = anjungan_get('mode');
 
-$mode = $_GET['mode'] ?? '';
-
-switch ($mode) {
-
-    case 'cari_pasien':
-
-        $nik  = trim($_POST['nik'] ?? '');
-        $noka = trim($_POST['noka'] ?? '');
-        // var_dump($nik);
-
-
-        if ($nik === '' && $noka === '') {
-            echo json_encode([
-                'status' => false,
-                'message' => 'NIK atau No Kartu kosong'
-            ]);
-            exit;
-        }
-
-        $sql = "
-            SELECT 
-                no_rkm_medis,
-                nm_pasien,
-                tgl_lahir,
-                jk,
-                no_peserta,
-                no_ktp
-            FROM pasien
-            WHERE no_ktp = ?
-               
-            LIMIT 1
-        ";
-
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param('s', $nik);
-        $stmt->execute();
-        $res = $stmt->get_result();
-
-        if ($res->num_rows === 0) {
-            echo json_encode([
-                'status' => false,
-                'not_registered' => true,
-                'message' => 'Pasien belum memiliki Rekam Medis'
-            ]);
-            exit;
-        }
-
-        echo json_encode([
-            'status' => true,
-            'data' => $res->fetch_assoc()
-        ]);
-        exit;
+try {
+    switch ($mode) {
+        case 'cari_pasien':
+            handle_search_patient($conn);
+            break;
 
         case 'load_poli':
+            handle_load_poli($conn);
+            break;
 
-        $sql = "
-            SELECT 
-                p.kd_poli,
-                p.nm_poli
-            FROM poliklinik p
-            WHERE p.status = '1'
-            ORDER BY p.nm_poli
-        ";
+        case 'load_dokter':
+            handle_load_doctor($conn);
+            break;
 
-        $res = $conn->query($sql);
+        case 'simpan_registrasi':
+            handle_save_registration($conn);
+            break;
 
-        $data = [];
-        while ($row = $res->fetch_assoc()) {
-            $data[] = $row;
-        }
+        case 'cek_status_antrean_bpjs':
+            handle_bpjs_queue_status($conn);
+            break;
 
-        echo json_encode([
-            'status' => true,
-            'data' => $data
-        ]);
-        exit;
-
-
-
-
-        // ===============================
-// LOAD DOKTER BY POLI
-// ===============================
-case 'load_dokter':
-
-    $kd_poli = $_GET['kd_poli'] ?? '';
-
-    if ($kd_poli == '') {
-        echo json_encode([
-            'status' => false,
-            'message' => 'Kode poli kosong'
-        ]);
-        exit;
+        default:
+            anjungan_fail('Mode tidak valid', 404);
+    }
+} catch (Throwable $exception) {
+    if ($mode === 'simpan_registrasi') {
+        anjungan_json([
+            'status' => 'error',
+            'message' => 'Terjadi kesalahan server',
+        ], 500);
     }
 
-    // ambil hari sekarang (SENIN, SELASA, dst)
-    $hari = strtoupper(date('l'));
-    $mapHari = [
-        'MONDAY'    => 'SENIN',
-        'TUESDAY'   => 'SELASA',
-        'WEDNESDAY' => 'RABU',
-        'THURSDAY'  => 'KAMIS',
-        'FRIDAY'    => 'JUMAT',
-        'SATURDAY'  => 'SABTU',
-        'SUNDAY'    => 'AKHAD'
-    ];
-    $hari_ini = $mapHari[$hari] ?? 'SENIN';
+    anjungan_fail('Terjadi kesalahan server', 500);
+}
+
+function handle_search_patient(mysqli $conn): void
+{
+    anjungan_require_post();
+
+    $nik = anjungan_post('nik');
+    $noka = anjungan_post('noka');
+
+    if ($nik === '' && $noka === '') {
+        anjungan_fail('NIK atau nomor kartu wajib diisi');
+    }
 
     $sql = "
-        SELECT 
+        SELECT
+            no_rkm_medis,
+            nm_pasien,
+            tgl_lahir,
+            jk,
+            no_peserta,
+            no_ktp,
+            alamat,
+            no_tlp
+        FROM pasien
+        WHERE (? <> '' AND no_ktp = ?)
+           OR (? <> '' AND no_peserta = ?)
+        LIMIT 1
+    ";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('ssss', $nik, $nik, $noka, $noka);
+    $stmt->execute();
+    $patient = $stmt->get_result()->fetch_assoc();
+
+    if (!$patient) {
+        anjungan_json([
+            'status' => false,
+            'not_registered' => true,
+            'message' => 'Pasien belum memiliki rekam medis',
+        ]);
+    }
+
+    anjungan_json([
+        'status' => true,
+        'data' => [
+            'no_rkm_medis' => $patient['no_rkm_medis'],
+            'nm_pasien' => $patient['nm_pasien'],
+            'tgl_lahir' => anjungan_normalize_date((string) $patient['tgl_lahir']),
+            'jk' => anjungan_normalize_gender((string) $patient['jk']),
+            'no_peserta' => $patient['no_peserta'],
+            'no_ktp' => $patient['no_ktp'],
+            'alamat' => $patient['alamat'] ?? '',
+            'no_tlp' => $patient['no_tlp'] ?? '',
+        ],
+    ]);
+}
+
+function handle_load_poli(mysqli $conn): void
+{
+    $sql = "
+        SELECT
+            kd_poli,
+            nm_poli
+        FROM poliklinik
+        WHERE status = '1'
+        ORDER BY nm_poli
+    ";
+
+    $result = $conn->query($sql);
+    $data = [];
+
+    while ($row = $result->fetch_assoc()) {
+        $data[] = $row;
+    }
+
+    anjungan_json([
+        'status' => true,
+        'data' => $data,
+    ]);
+}
+
+function handle_load_doctor(mysqli $conn): void
+{
+    $kdPoli = anjungan_get('kd_poli');
+
+    if ($kdPoli === '') {
+        anjungan_fail('Kode poli wajib diisi');
+    }
+
+    $hari = anjungan_day_name();
+
+    $sql = "
+        SELECT
             j.kd_dokter,
             d.nm_dokter,
             j.jam_mulai,
             j.jam_selesai,
             j.kuota
         FROM jadwal j
-        JOIN dokter d ON d.kd_dokter = j.kd_dokter
+        INNER JOIN dokter d ON d.kd_dokter = j.kd_dokter
         WHERE j.kd_poli = ?
           AND j.hari_kerja = ?
-        ORDER BY j.jam_mulai
+        ORDER BY j.jam_mulai, d.nm_dokter
     ";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param('ss', $kd_poli, $hari_ini);
+    $stmt->bind_param('ss', $kdPoli, $hari);
     $stmt->execute();
-    $res = $stmt->get_result();
+    $result = $stmt->get_result();
 
     $data = [];
-    while ($row = $res->fetch_assoc()) {
-        $data[] = $row;
+
+    while ($row = $result->fetch_assoc()) {
+        $data[] = [
+            'kd_dokter' => $row['kd_dokter'],
+            'nm_dokter' => $row['nm_dokter'],
+            'jam_mulai' => substr((string) $row['jam_mulai'], 0, 5),
+            'jam_selesai' => substr((string) $row['jam_selesai'], 0, 5),
+            'kuota' => (int) $row['kuota'],
+        ];
     }
 
-    echo json_encode([
+    anjungan_json([
         'status' => true,
-        'data'   => $data,
-        'hari'   => $hari_ini
+        'hari' => $hari,
+        'data' => $data,
     ]);
-    exit;
+}
 
+function handle_save_registration(mysqli $conn): void
+{
+    anjungan_require_post();
 
+    $noRm = anjungan_post('no_rkm_medis');
+    $kdPoli = anjungan_post('kd_poli');
+    $kdDokter = anjungan_post('kd_dokter');
+    $birthDate = anjungan_normalize_date(anjungan_post('tgl_lahir'));
+    $registrationDate = date('Y-m-d');
+    $registrationTime = date('H:i:s');
 
-    // ===============================
-// SIMPAN REGISTRASI / ANTRIAN
-// ===============================
-case 'simpan_registrasi':
+    if ($noRm === '' || $kdPoli === '' || $kdDokter === '') {
+        anjungan_json([
+            'status' => 'error',
+            'message' => 'Data registrasi belum lengkap',
+        ]);
+    }
 
-$no_rkm_medis = $_POST['no_rkm_medis'] ?? '';
-$kd_poli      = $_POST['kd_poli'] ?? '';
-$kd_dokter    = $_POST['kd_dokter'] ?? '';
-$kd_pj        = $_POST['kd_pj'] ?? 'BPJ';
-$tgl_lahir        = $_POST['tgl_lahir'] ?? '';
-$tgl = date('Y-m-d');     // untuk DB (DATE)
-$jam = date('H:i:s');     // untuk DB (TIME)
+    try {
+        $payload = anjungan_transaction($conn, function (mysqli $conn) use (
+            $noRm,
+            $kdPoli,
+            $kdDokter,
+            $birthDate,
+            $registrationDate,
+            $registrationTime
+        ): array {
+            $patientStmt = $conn->prepare("
+                SELECT
+                    no_rkm_medis,
+                    nm_pasien,
+                    tgl_lahir,
+                    jk,
+                    no_tlp
+                FROM pasien
+                WHERE no_rkm_medis = ?
+                LIMIT 1
+            ");
+            $patientStmt->bind_param('s', $noRm);
+            $patientStmt->execute();
+            $patient = $patientStmt->get_result()->fetch_assoc();
 
-// echo json_encode([
-//     'debug_post' => $_POST
-// ]);
-// exit;
+            if (!$patient) {
+                throw new RuntimeException('Data pasien tidak ditemukan');
+            }
 
-$umurdaftar = 0;
-$sttsumur   = 'Th';
+            $effectiveBirthDate = $birthDate !== ''
+                ? $birthDate
+                : anjungan_normalize_date((string) $patient['tgl_lahir']);
 
-if (!empty($tgl_lahir)) {
+            $scheduleDay = anjungan_day_name();
 
-    $lahir = new DateTime($tgl_lahir);
-    $daftar = new DateTime($tgl);
+            $scheduleStmt = $conn->prepare("
+                SELECT kuota
+                FROM jadwal
+                WHERE kd_poli = ?
+                  AND kd_dokter = ?
+                  AND hari_kerja = ?
+                LIMIT 1
+            ");
+            $scheduleStmt->bind_param('sss', $kdPoli, $kdDokter, $scheduleDay);
+            $scheduleStmt->execute();
+            $schedule = $scheduleStmt->get_result()->fetch_assoc();
 
-    $diff = $lahir->diff($daftar);
+            if (!$schedule) {
+                throw new RuntimeException('Jadwal dokter tidak tersedia untuk hari ini');
+            }
 
-    if ($diff->y > 0) {
-        $umurdaftar = $diff->y;
-        $sttsumur   = 'Th';
-    } elseif ($diff->m > 0) {
-        $umurdaftar = $diff->m;
-        $sttsumur   = 'Bl';
-    } else {
-        $umurdaftar = $diff->d;
-        $sttsumur   = 'Hr';
+            $quota = (int) $schedule['kuota'];
+
+            $quotaStmt = $conn->prepare("
+                SELECT COUNT(*) AS total
+                FROM reg_periksa
+                WHERE tgl_registrasi = ?
+                  AND kd_poli = ?
+                  AND kd_dokter = ?
+            ");
+            $quotaStmt->bind_param('sss', $registrationDate, $kdPoli, $kdDokter);
+            $quotaStmt->execute();
+            $currentQueue = (int) ($quotaStmt->get_result()->fetch_assoc()['total'] ?? 0);
+
+            if ($quota <= 0 || $currentQueue >= $quota) {
+                throw new RuntimeException('Kuota dokter hari ini sudah penuh');
+            }
+
+            $pendingStmt = $conn->prepare("
+                SELECT no_rawat
+                FROM reg_periksa
+                WHERE no_rkm_medis = ?
+                  AND tgl_registrasi = ?
+                  AND stts = 'Belum'
+                LIMIT 1
+                FOR UPDATE
+            ");
+            $pendingStmt->bind_param('ss', $noRm, $registrationDate);
+            $pendingStmt->execute();
+
+            if ($pendingStmt->get_result()->fetch_assoc()) {
+                throw new RuntimeException('Pasien sudah terdaftar dan belum dilayani hari ini');
+            }
+
+            $prefixStmt = $conn->prepare("
+                SELECT kode_prefix
+                FROM maping_dokter_kode
+                WHERE kd_dokter = ?
+                LIMIT 1
+            ");
+            $prefixStmt->bind_param('s', $kdDokter);
+            $prefixStmt->execute();
+            $prefixRow = $prefixStmt->get_result()->fetch_assoc();
+            $prefix = trim((string) ($prefixRow['kode_prefix'] ?? 'RG'));
+
+            if ($prefix === '') {
+                $prefix = 'RG';
+            }
+
+            $lastRegStmt = $conn->prepare("
+                SELECT no_reg
+                FROM reg_periksa
+                WHERE tgl_registrasi = ?
+                  AND kd_dokter = ?
+                ORDER BY no_reg DESC
+                LIMIT 1
+                FOR UPDATE
+            ");
+            $lastRegStmt->bind_param('ss', $registrationDate, $kdDokter);
+            $lastRegStmt->execute();
+            $lastRegRow = $lastRegStmt->get_result()->fetch_assoc();
+            $nextRegSequence = extract_sequence((string) ($lastRegRow['no_reg'] ?? '')) + 1;
+            $noReg = $prefix . '-' . str_pad((string) $nextRegSequence, 3, '0', STR_PAD_LEFT);
+
+            $lastRawatStmt = $conn->prepare("
+                SELECT no_rawat
+                FROM reg_periksa
+                WHERE tgl_registrasi = ?
+                ORDER BY no_rawat DESC
+                LIMIT 1
+                FOR UPDATE
+            ");
+            $lastRawatStmt->bind_param('s', $registrationDate);
+            $lastRawatStmt->execute();
+            $lastRawatRow = $lastRawatStmt->get_result()->fetch_assoc();
+            $nextRawatSequence = extract_sequence((string) ($lastRawatRow['no_rawat'] ?? '')) + 1;
+            $noRawat = date('Y/m/d', strtotime($registrationDate)) . '/' . str_pad((string) $nextRawatSequence, 6, '0', STR_PAD_LEFT);
+
+            $age = anjungan_calculate_age($effectiveBirthDate, $registrationDate);
+
+            $insertStmt = $conn->prepare("
+                INSERT INTO reg_periksa (
+                    no_reg,
+                    no_rawat,
+                    tgl_registrasi,
+                    jam_reg,
+                    kd_dokter,
+                    no_rkm_medis,
+                    kd_poli,
+                    p_jawab,
+                    almt_pj,
+                    hubunganpj,
+                    biaya_reg,
+                    stts,
+                    stts_daftar,
+                    status_lanjut,
+                    kd_pj,
+                    umurdaftar,
+                    sttsumur,
+                    status_bayar,
+                    status_poli
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+
+            $personInCharge = '-';
+            $addressInCharge = '-';
+            $relation = '-';
+            $registrationFee = '0';
+            $status = 'Belum';
+            $registrationStatus = 'Lama';
+            $serviceStatus = 'Ralan';
+            $payerCode = 'BPJ';
+            $paymentStatus = 'Belum Bayar';
+            $poliStatus = 'Baru';
+            $ageValue = (string) $age['value'];
+            $ageUnit = (string) $age['unit'];
+
+            $insertStmt->bind_param(
+                'sssssssssssssssssss',
+                $noReg,
+                $noRawat,
+                $registrationDate,
+                $registrationTime,
+                $kdDokter,
+                $noRm,
+                $kdPoli,
+                $personInCharge,
+                $addressInCharge,
+                $relation,
+                $registrationFee,
+                $status,
+                $registrationStatus,
+                $serviceStatus,
+                $payerCode,
+                $ageValue,
+                $ageUnit,
+                $paymentStatus,
+                $poliStatus
+            );
+            $insertStmt->execute();
+
+            $receiptStmt = $conn->prepare("
+                SELECT
+                    rp.no_reg,
+                    rp.no_rawat,
+                    rp.tgl_registrasi,
+                    p.nm_pasien,
+                    p.tgl_lahir,
+                    p.no_tlp,
+                    p.no_ktp,
+                    p.no_peserta,
+                    p.jk,
+                    p.no_rkm_medis,
+                    d.nm_dokter,
+                    pl.nm_poli
+                FROM reg_periksa rp
+                INNER JOIN pasien p ON p.no_rkm_medis = rp.no_rkm_medis
+                INNER JOIN dokter d ON d.kd_dokter = rp.kd_dokter
+                INNER JOIN poliklinik pl ON pl.kd_poli = rp.kd_poli
+                WHERE rp.no_rawat = ?
+                LIMIT 1
+            ");
+            $receiptStmt->bind_param('s', $noRawat);
+            $receiptStmt->execute();
+            $receipt = $receiptStmt->get_result()->fetch_assoc();
+
+            if (!$receipt) {
+                throw new RuntimeException('Bukti registrasi tidak ditemukan');
+            }
+
+            return [
+                'tanggal' => anjungan_format_display_date((string) $receipt['tgl_registrasi']),
+                'no_reg' => $receipt['no_reg'],
+                'no_rawat' => $receipt['no_rawat'],
+                'nm_poli' => $receipt['nm_poli'],
+                'nm_dokter' => $receipt['nm_dokter'],
+                'nm_pasien' => $receipt['nm_pasien'],
+                'tgl_lahir' => anjungan_format_display_date((string) $receipt['tgl_lahir']),
+                'no_rkm_medis' => $receipt['no_rkm_medis'],
+                'no_ktp' => $receipt['no_ktp'] ?? '',
+                'no_peserta' => $receipt['no_peserta'] ?? '',
+                'jk' => anjungan_gender_label((string) $receipt['jk']),
+                'no_tlp' => $receipt['no_tlp'] ?? '-',
+            ];
+        });
+
+        anjungan_json(array_merge([
+            'status' => 'success',
+        ], $payload));
+    } catch (RuntimeException $exception) {
+        anjungan_json([
+            'status' => 'error',
+            'message' => $exception->getMessage(),
+        ]);
     }
 }
 
+function handle_bpjs_queue_status(mysqli $conn): void
+{
+    $noRawat = anjungan_get('no_rawat');
 
+    if ($noRawat === '') {
+        anjungan_fail('Nomor rawat wajib diisi');
+    }
 
-$kd_pj = "BPJ";
-$p_jawab = "-";
-$almt_pj = "-";
-$hubunganpj = "-";
-$biaya_reg = 0;
+    $stmt = $conn->prepare("
+        SELECT
+            id,
+            no_rawat,
+            tgl_kirim,
+            response,
+            status_code,
+            message,
+            created_at
+        FROM antrean_terkirim_bpjs
+        WHERE no_rawat = ?
+        ORDER BY id DESC
+        LIMIT 1
+    ");
+    $stmt->bind_param('s', $noRawat);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
 
-$stts          = "Belum";
-$stts_daftar   = "Lama";
-$status_lanjut = "Ralan";
-
-$status_bayar  = "Belum Bayar";
-$status_poli   = "Baru";
-
-if ($no_rkm_medis === '' || $kd_poli === '' || $kd_dokter === '') {
-    echo json_encode([
-        'status'  => false,
-        'message' => 'Data belum lengkap'
-    ]);
-    exit;
-}
-    // ==============================
-// GENERATE NO_REG
-// ==============================
-$sqlNoReg = "
-    SELECT rp.no_reg, md.kode_prefix
-    FROM reg_periksa rp
-    INNER JOIN maping_dokter_kode md ON rp.kd_dokter = md.kd_dokter
-    WHERE rp.tgl_registrasi = ?
-      AND rp.kd_dokter = ?
-    ORDER BY rp.no_reg DESC
-    LIMIT 1
-";
-
-$stmt = $conn->prepare($sqlNoReg);
-$stmt->bind_param("ss", $tgl, $kd_dokter);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($row = $result->fetch_assoc()) {
-    $lastNumber = intval(substr($row['no_reg'], -3));
-    $nextNumber = $lastNumber + 1;
-    $kodePrefix = $row['kode_prefix'];
-} else {
-    // belum ada pasien hari ini
-    $sqlPrefix = "
-    SELECT kode_prefix
-    FROM maping_dokter_kode
-    WHERE kd_dokter = ?
-    LIMIT 1
-";
-
-$stmtPrefix = $conn->prepare($sqlPrefix);
-$stmtPrefix->bind_param("s", $kd_dokter);
-$stmtPrefix->execute();
-$resPrefix = $stmtPrefix->get_result();
-
-if ($rowPrefix = $resPrefix->fetch_assoc()) {
-    $kodePrefix = $rowPrefix['kode_prefix'];
-} else {
-    // fallback aman
-    $kodePrefix = 'RG';
-}
-    $nextNumber = 1;
-}
-
-$no_reg = $kodePrefix . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
-
-
-
-// ==============================
-// CEK SUDAH PERNAH DAFTAR & SUDAH DIPROSES
-// ==============================
-$sqlCek = "
-    SELECT stts
-    FROM reg_periksa
-    WHERE no_rkm_medis = ?
-      AND tgl_registrasi = ?
-      AND stts = 'Belum'
-    LIMIT 1
-";
-
-$stmtCek = $conn->prepare($sqlCek);
-$stmtCek->bind_param("ss", $no_rkm_medis, $tgl);
-$stmtCek->execute();
-$resCek = $stmtCek->get_result();
-
-if ($resCek->num_rows > 0) {
-    echo json_encode([
-        'status'  => 'error',
-        'message' => 'Pasien sudah terdaftar dan belum dilayani hari ini'
-    ]);
-    exit;
-}
-
-
-
-// ==============================
-// GENERATE NO_RAWAT
-// ==============================
-$tglFormat = date('Y/m/d', strtotime($tgl));
-
-$sqlRawat = "
-    SELECT no_rawat
-    FROM reg_periksa
-    WHERE tgl_registrasi = ?
-    ORDER BY no_rawat DESC
-    LIMIT 1
-";
-
-$stmt = $conn->prepare($sqlRawat);
-$stmt->bind_param("s", $tgl);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($row = $result->fetch_assoc()) {
-    $lastNumber = intval(substr($row['no_rawat'], -6));
-    $nextNumber = $lastNumber + 1;
-} else {
-    $nextNumber = 1;
-}
-
-$no_rawat = $tglFormat . '/' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
-// var_dump($no_rkm_medis);
-// exit();
-
-// var_dump($no_rkm_medis);
-// exit();
-// ==============================
-// SIMPAN REGISTRASI
-// ==============================
-$sql = "
-INSERT INTO reg_periksa (
-    no_reg,
-    no_rawat,
-    tgl_registrasi,
-    jam_reg,
-    kd_dokter,
-    no_rkm_medis,
-    kd_poli,
-    p_jawab,
-    almt_pj,
-    hubunganpj,
-    biaya_reg,
-    stts,
-    stts_daftar,
-    status_lanjut,
-    kd_pj,
-    umurdaftar,
-    sttsumur,
-    status_bayar,
-    status_poli
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-";
-
-
-
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param(
-    "sssssssssssssssssss",
-    $no_reg,
-    $no_rawat,
-    $tgl,
-    $jam,
-    $kd_dokter,
-    $no_rkm_medis,
-    $kd_poli,
-    $p_jawab,
-    $almt_pj,
-    $hubunganpj,
-    $biaya_reg,
-    $stts,
-    $stts_daftar,
-    $status_lanjut,
-    $kd_pj,
-    $umurdaftar,
-    $sttsumur,
-    $status_bayar,
-    $status_poli
-);
-
-if ($stmt->execute()) {
-
-
-$sqlgetData = "
-SELECT  
-    rp.no_reg,
-    rp.no_rawat,
-    rp.tgl_registrasi,
-    p.nm_pasien,
-    p.tgl_lahir,
-    p.no_tlp,
-    p.jk,
-    p.no_rkm_medis,
-    d.nm_dokter,
-    pl.nm_poli
-FROM reg_periksa rp
-INNER JOIN pasien p ON rp.no_rkm_medis = p.no_rkm_medis
-INNER JOIN dokter d ON rp.kd_dokter = d.kd_dokter
-INNER JOIN poliklinik pl ON rp.kd_poli = pl.kd_poli
-WHERE rp.no_rawat = ?
-";
-
-$stmtCekgetData = $conn->prepare($sqlgetData);
-$stmtCekgetData->bind_param("s", $no_rawat);
-$stmtCekgetData->execute();
-$resCek_data = $stmtCekgetData->get_result();
-
-$row = $resCek_data->fetch_assoc();
-
-if ($row) {
-
-    $no_reg        = $row['no_reg'];
-    $no_rawat      = $row['no_rawat'];
-    $tgl_daftar    = date('d-m-Y', strtotime($row['tgl_registrasi']));
-    $nm_pasien     = $row['nm_pasien'];
-    $tgl_lahir     = $row['tgl_lahir'];
-    $no_tlp        = $row['no_tlp'];
-    $jk            = $row['jk'] == 'L' ? 'Laki - Laki' : 'Perempuan';
-    $no_rkm_medis  = $row['no_rkm_medis'];
-    $nm_dokter     = $row['nm_dokter'];
-    $nm_poli       = $row['nm_poli'];
-
-} else {
-
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Data tidak ditemukan'
-    ]);
-    exit;
-
-}
-    echo json_encode([
-        'status'   => 'success',
-        'tanggal'   => $tgl_daftar,
-        'no_reg'   => $no_reg,
-        'no_rawat' => $no_rawat,
-        'nm_poli' => $nm_poli,
-        'nm_dokter' => $nm_dokter,
-        'nm_pasien' => $nm_pasien,
-        'tgl_lahir' => $tgl_lahir,
-        'no_rkm_medis' => $no_rkm_medis,
-        'jk' => $jk ,
-        'no_tlp' => $no_tlp,
-
-
-        
-
-    ]);
-    exit;
-} else {
-    echo json_encode([
-        'status'  => 'error',
-        'message' => $stmt->error
-    ]);
-    exit;
-}
-
-    default:
-        echo json_encode([
-            'status' => false,
-            'message' => 'Mode tidak valid'
+    if (!$row) {
+        anjungan_json([
+            'status' => true,
+            'state' => 'waiting',
+            'message' => 'Menunggu service BPJS memproses antrean',
+            'data' => null,
         ]);
-        exit;
+    }
+
+    $statusCode = isset($row['status_code']) ? (int) $row['status_code'] : null;
+    $message = trim((string) ($row['message'] ?? ''));
+    $normalizedMessage = strtolower($message);
+    $responsePayload = json_decode((string) ($row['response'] ?? ''), true);
+    $responseMetadataCode = null;
+    $responseMetadataMessage = '';
+
+    if (is_array($responsePayload) && isset($responsePayload['metadata'])) {
+        $responseMetadataCode = isset($responsePayload['metadata']['code'])
+            ? (int) $responsePayload['metadata']['code']
+            : null;
+        $responseMetadataMessage = strtolower(trim((string) ($responsePayload['metadata']['message'] ?? '')));
+    }
+
+    $state = 'error';
+    $successfulMessages = ['ok', 'completed', 'success', 'berhasil'];
+    $duplicateSuccessMessage = 'peserta sudah terdaftar di poli tersebut pada hari ini';
+    $screeningMarkers = [
+        'belum skrining',
+        'belum melakukan skrining kesehatan',
+    ];
+
+    if (
+        $statusCode === 200 ||
+        $responseMetadataCode === 200 ||
+        in_array($normalizedMessage, $successfulMessages, true) ||
+        ($statusCode === 201 && $normalizedMessage === $duplicateSuccessMessage) ||
+        ($responseMetadataCode === 201 && $responseMetadataMessage === $duplicateSuccessMessage)
+    ) {
+        $state = 'completed';
+    } else {
+        foreach ($screeningMarkers as $marker) {
+            if (
+                str_contains($normalizedMessage, $marker) ||
+                str_contains($responseMetadataMessage, $marker)
+            ) {
+                $state = 'screening_required';
+                break;
+            }
+        }
+    }
+
+    anjungan_json([
+        'status' => true,
+        'state' => $state,
+        'message' => $message !== '' ? $message : 'Status antrean BPJS belum diketahui',
+        'data' => [
+            'id' => (int) $row['id'],
+            'no_rawat' => $row['no_rawat'],
+            'tgl_kirim' => $row['tgl_kirim'],
+            'status_code' => $statusCode,
+            'message' => $message,
+            'response_metadata_code' => $responseMetadataCode,
+            'response_metadata_message' => $responseMetadataMessage,
+            'created_at' => $row['created_at'],
+        ],
+    ]);
+}
+
+function extract_sequence(string $value): int
+{
+    if ($value === '') {
+        return 0;
+    }
+
+    if (preg_match('/(\d+)$/', $value, $matches) === 1) {
+        return (int) $matches[1];
+    }
+
+    return 0;
 }

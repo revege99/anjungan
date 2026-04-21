@@ -1,45 +1,58 @@
 <?php
-header('Content-Type: application/json');
+declare(strict_types=1);
+
 require_once '../function/configDB.php';
 
-$mode = $_GET['mode'] ?? '';
+if (anjungan_get('mode') !== 'getPasien') {
+    anjungan_fail('Mode tidak valid', 404);
+}
 
-switch ($mode) {
+anjungan_require_post();
 
-    case 'getPasien':
-        $nomor = $_POST['nomor'] ?? '';
+$nomor = anjungan_post('nomor');
 
-        if ($nomor == '') {
-            echo json_encode(['status'=>false,'message'=>'Nomor kosong']);
-            exit;
-        }
+if ($nomor === '') {
+    anjungan_fail('Nomor identitas wajib diisi');
+}
 
-        $sql = "SELECT no_rkm_medis, nm_pasien, no_ktp, no_peserta
-                FROM pasien
-                WHERE no_ktp=? OR no_peserta=?
-                LIMIT 1";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ss", $nomor, $nomor);
-        $stmt->execute();
-        $res = $stmt->get_result();
+try {
+    $sql = "
+        SELECT
+            no_rkm_medis,
+            nm_pasien,
+            no_ktp,
+            no_peserta,
+            tgl_lahir,
+            jk,
+            alamat,
+            no_tlp
+        FROM pasien
+        WHERE no_ktp = ? OR no_peserta = ?
+        LIMIT 1
+    ";
 
-        if ($res->num_rows > 0) {
-            echo json_encode([
-                'status' => true,
-                'data'   => $res->fetch_assoc()
-            ]);
-        } else {
-            echo json_encode([
-                'status' => false,
-                'message'=> 'Tidak ditemukan'
-            ]);
-        }
-        break;
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('ss', $nomor, $nomor);
+    $stmt->execute();
+    $patient = $stmt->get_result()->fetch_assoc();
 
-    case 'ambilAntrian':
-        // nanti kita isi insert ke tabel antrian
-        break;
+    if (!$patient) {
+        anjungan_fail('Data pasien tidak ditemukan', 404);
+    }
 
-    default:
-        echo json_encode(['status'=>false,'message'=>'Mode tidak valid']);
+    anjungan_json([
+        'status' => true,
+        'data' => [
+            'no_rkm_medis' => $patient['no_rkm_medis'],
+            'nm_pasien' => $patient['nm_pasien'],
+            'no_ktp' => $patient['no_ktp'],
+            'no_peserta' => $patient['no_peserta'],
+            'tgl_lahir' => anjungan_normalize_date((string) $patient['tgl_lahir']),
+            'jk' => anjungan_normalize_gender((string) $patient['jk']),
+            'alamat' => $patient['alamat'] ?? '',
+            'no_tlp' => $patient['no_tlp'] ?? '',
+        ],
+    ]);
+} catch (Throwable $exception) {
+    anjungan_fail('Gagal memuat data pasien', 500);
 }

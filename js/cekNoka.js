@@ -1,116 +1,237 @@
-let bpjsData = null;
-function cekPeserta() {
+const bpjsForm = document.getElementById('bpjsForm');
+const jenisField = document.getElementById('jenis');
+const nomorField = document.getElementById('nomor');
+const hasilBox = document.getElementById('hasil');
 
-    const jenis = document.getElementById('jenis').value;
-    const nomor = document.getElementById('nomor').value;
-    const hasil = document.getElementById('hasil');
+const bpjsState = {
+    participant: null,
+};
+
+if (bpjsForm) {
+    bpjsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await cekPeserta();
+    });
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function safeText(value, fallback = '-') {
+    const text = String(value ?? '').trim();
+    return text !== '' ? text : fallback;
+}
+
+function formatDate(value) {
+    const text = String(value ?? '').trim();
+
+    if (!text) {
+        return '-';
+    }
+
+    const parts = text.split('-');
+
+    if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
+    return text;
+}
+
+function providerName(participant) {
+    return (
+        participant?.kdProviderPst?.nmProvider ||
+        participant?.provUmum?.kdProviderPst?.nmProvider ||
+        participant?.faskes?.nama ||
+        ''
+    );
+}
+
+function normalizeParticipant(rawParticipant) {
+    const participant = rawParticipant || {};
+    const gender = String(participant.jenisKelamin || participant.sex || '').trim().toUpperCase();
+    const active = typeof participant.aktif === 'boolean'
+        ? participant.aktif
+        : ['true', '1', 'ya', 'aktif'].includes(String(participant.aktif).trim().toLowerCase());
+
+    return {
+        noKTP: safeText(participant.noKTP, ''),
+        noKartu: safeText(participant.noKartu, ''),
+        nama: safeText(participant.nama, ''),
+        tglLahir: safeText(participant.tglLahir, ''),
+        jenisKelamin: gender === 'L' || gender === 'P' ? gender : '',
+        aktif: active,
+        tunggakan: safeText(participant.tunggakan),
+        fktp: safeText(providerName(participant)),
+        alamat: safeText(participant.alamat, ''),
+        noHP: safeText(participant.noHP, ''),
+    };
+}
+
+function renderNotice(type, title, description) {
+    hasilBox.hidden = false;
+
+    const chipClass = type === 'success' ? 'success' : 'danger';
+
+    hasilBox.innerHTML = `
+        <div class="d-flex flex-column gap-3">
+            <div>
+                <span class="status-chip ${chipClass}">${escapeHtml(title)}</span>
+            </div>
+            <div class="fs-5 fw-semibold">${escapeHtml(description)}</div>
+        </div>
+    `;
+}
+
+function renderLoading() {
+    hasilBox.hidden = false;
+    hasilBox.innerHTML = `
+        <div class="d-flex align-items-center gap-3">
+            <div class="spinner-border text-info" role="status" aria-hidden="true"></div>
+            <div>
+                <div class="fw-semibold fs-5">Memeriksa data peserta</div>
+                <div class="text-muted">Sistem sedang menghubungi layanan BPJS.</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderParticipant(participant) {
+    hasilBox.hidden = false;
+
+    const statusClass = participant.aktif ? 'success' : 'danger';
+    const statusText = participant.aktif ? 'Peserta Aktif' : 'Peserta Tidak Aktif';
+    const actionButton = participant.aktif
+        ? `
+            <button id="btnAntrian" type="button" class="btn btn-anj-primary mt-4">
+                <i class="bi bi-arrow-right-circle me-2"></i>
+                Lanjut Ambil Antrean
+            </button>
+        `
+        : `
+            <button type="button" class="btn btn-anj-ghost mt-4" disabled>
+                Antrean hanya tersedia untuk peserta aktif
+            </button>
+        `;
+
+    hasilBox.innerHTML = `
+        <div class="d-flex flex-column gap-4">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                <div>
+                    <span class="status-chip ${statusClass}">${escapeHtml(statusText)}</span>
+                </div>
+                <div class="foot-note">Pastikan data sesuai.</div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="section-title">Identitas Peserta</div>
+                    <div class="list-clean">
+                        <div class="list-row">
+                            <span>Nama</span>
+                            <span>${escapeHtml(safeText(participant.nama))}</span>
+                        </div>
+                        <div class="list-row">
+                            <span>No. Kartu BPJS</span>
+                            <span>${escapeHtml(safeText(participant.noKartu))}</span>
+                        </div>
+                        <div class="list-row">
+                            <span>NIK</span>
+                            <span>${escapeHtml(safeText(participant.noKTP))}</span>
+                        </div>
+                        <div class="list-row">
+                            <span>Tanggal Lahir</span>
+                            <span>${escapeHtml(formatDate(participant.tglLahir))}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="section-title">Informasi Kepesertaan</div>
+                    <div class="list-clean">
+                        <div class="list-row">
+                            <span>Status</span>
+                            <span>${escapeHtml(statusText)}</span>
+                        </div>
+                        <div class="list-row">
+                            <span>Tunggakan</span>
+                            <span>${escapeHtml(participant.tunggakan)}</span>
+                        </div>
+                        <div class="list-row">
+                            <span>FKTP</span>
+                            <span>${escapeHtml(participant.fktp)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div>${actionButton}</div>
+        </div>
+    `;
+
+    if (participant.aktif) {
+        document.getElementById('btnAntrian')?.addEventListener('click', () => {
+            submitHiddenForm('/anjungan/php/cekNoka/ambilAntrian.php', {
+                nik: participant.noKTP,
+                noka: participant.noKartu,
+                nama: participant.nama,
+                tgl_lahir: participant.tglLahir,
+                jk: participant.jenisKelamin,
+                alamat: participant.alamat,
+                no_hp: participant.noHP,
+            });
+        });
+    }
+}
+
+function submitHiddenForm(action, fields) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = action;
+
+    Object.entries(fields).forEach(([key, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value ?? '';
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+async function cekPeserta() {
+    const jenis = jenisField.value.trim();
+    const nomor = nomorField.value.trim();
 
     if (!jenis || !nomor) {
-        hasil.className = "p-4 result-box bg-danger text-white";
-        hasil.innerHTML = "Jenis kartu dan nomor wajib diisi";
+        renderNotice('danger', 'Data belum lengkap', 'Pilih jenis pencarian dan isi nomor.');
         return;
     }
 
-    hasil.className = "p-4 result-box bg-info text-white";
-    hasil.innerHTML = "⏳ Memproses data...";
+    renderLoading();
 
-    fetch(`bpjs_peserta.php?jenis=${jenis}&nomor=${nomor}`)
-        .then(res => res.json())
-        .then(data => {
+    try {
+        const response = await fetch(
+            `/anjungan/php/cekNoka/bpjs_peserta.php?jenis=${encodeURIComponent(jenis)}&nomor=${encodeURIComponent(nomor)}`
+        );
+        const data = await response.json();
 
-            if (!data.status) {
-                hasil.className = "p-4 result-box bg-warning text-dark";
-                hasil.innerHTML = data.message ?? "Terjadi kesalahan";
-                return;
-            }
+        if (!data.status) {
+            renderNotice('danger', 'Pemeriksaan gagal', data.message || 'Data tidak ditemukan.');
+            return;
+        }
 
-            bpjsData = data.data; // <-- SIMPAN GLOBAL
-            console.log("BPJS DATA cek noka.js:", bpjsData);
-            const p = bpjsData;
-
-            const val = v => (!v || v === "") ? "-" : v;
-            const bool = v => v ? "YA" : "TIDAK";
-
-            const aktif = p.aktif;
-
-            hasil.className = `p-4 result-box ${aktif ? 'bg-success' : 'bg-danger'} text-white`;
-
-            hasil.innerHTML = `
-                <div class="text-center mb-3">
-                    <span class="status-badge ${aktif ? 'bg-light text-success' : 'bg-light text-danger'}">
-                        ${aktif ? 'PESERTA AKTIF' : 'PESERTA TIDAK AKTIF'}
-                    </span>
-                </div>
-
-                <div class="section-title">DATA UTAMA</div>
-                <div class="row">
-                    <div class="col-md-6"><span class="label">Nama</span><br><span class="value">${val(p.nama)}</span></div>
-                    <div class="col-md-6"><span class="label">No Kartu</span><br><span class="value">${val(p.noKartu)}</span></div>
-                    <div class="col-md-6 mt-2"><span class="label">NIK</span><br><span class="value">${val(p.noKTP)}</span></div>
-                    <div class="col-md-6 mt-2"><span class="label">Tgl Lahir</span><br><span class="value">${val(p.tglLahir)}</span></div>
-                </div>
-
-                <div class="section-title">KEPESERTAAN</div>
-                <div class="row">
-                    <div class="col-md-6">Aktif: <strong>${bool(p.aktif)}</strong></div>
-                    <div class="col-md-6">Tunggakan: <strong>${val(p.tunggakan)}</strong></div>
-                </div>
-
-                <div class="section-title">FASILITAS KESEHATAN</div>
-                <div>
-                    FKTP: <strong>${val(p.kdProviderPst?.nmProvider)}</strong>
-                </div>
-
-                <div class="text-center mt-4">
-                    <button id="btnAntrian"
-                        class="btn btn-lg ${aktif ? 'btn-light text-success' : 'btn-secondary'}"
-                        ${aktif ? '' : 'disabled'}>
-                        🏥 LANJUT AMBIL ANTRIAN
-                    </button>
-                </div>
-            `;
-
-            if (aktif) {
-                document.getElementById('btnAntrian').addEventListener('click', function(e) {
-
-                    e.preventDefault();
-
-                    if (!bpjsData) {
-                        alert('Data BPJS tidak tersedia');
-                        return;
-                    }
-                    const nomorInput = nomor;
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = 'ambilAntrian.php';
-
-                    const fields = {
-                        nik: bpjsData.noKTP || '',
-                        noka: bpjsData.noKartu || '',
-                        nama: bpjsData.nama || '',
-                        tgl_lahir: bpjsData.tglLahir || '',
-                        jk: bpjsData.sex || '',
-                        alamat: bpjsData.alamat || '',
-                        no_hp: bpjsData.noHP || ''
-                        };
-                        console.log("BPJS DATA kirim to ambilantrian:", bpjsData);
-
-
-                    Object.keys(fields).forEach(key => {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = key;
-                        input.value = fields[key];
-                        form.appendChild(input);
-                    });
-
-                    document.body.appendChild(form);
-                    form.submit();
-                });
-            }
-        })
-        .catch(() => {
-            hasil.className = "p-4 result-box bg-danger text-white";
-            hasil.innerHTML = "❌ Gagal menghubungi server";
-        });
+        bpjsState.participant = normalizeParticipant(data.data);
+        renderParticipant(bpjsState.participant);
+    } catch (error) {
+        renderNotice('danger', 'Server tidak merespons', 'Silakan coba lagi.');
+    }
 }

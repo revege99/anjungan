@@ -1,230 +1,126 @@
 <?php
-require_once '../../function/configDB.php';
+declare(strict_types=1);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+require_once '../../function/app.php';
 
-    $nik = $_POST['nik'] ?? '';
-    $noka = $_POST['noka'] ?? '';
-    $nama = $_POST['nama'] ?? '';
-    $tgl_lahir = $_POST['tgl_lahir'] ?? '';
-    $jk = $_POST['jk'] ?? '';
-    $alamat = $_POST['alamat'] ?? '';
-
-} else {
-    echo "Akses tidak valid";
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    header('Location: /anjungan/php/cekNoka/getDataAmbilAntrian.php');
     exit;
 }
-?>
 
+$nik = trim((string) ($_POST['nik'] ?? ''));
+$noka = trim((string) ($_POST['noka'] ?? ''));
+$nama = trim((string) ($_POST['nama'] ?? ''));
+$tglLahir = anjungan_normalize_date(trim((string) ($_POST['tgl_lahir'] ?? '')));
+$jk = anjungan_normalize_gender(trim((string) ($_POST['jk'] ?? '')));
+$alamat = trim((string) ($_POST['alamat'] ?? ''));
+$noHp = trim((string) ($_POST['no_hp'] ?? ''));
+
+$bpjsPayload = [
+    'noKTP' => $nik,
+    'noKartu' => $noka,
+    'nama' => $nama,
+    'tglLahir' => $tglLahir,
+    'sex' => $jk,
+    'jenisKelamin' => $jk,
+    'alamat' => $alamat,
+    'noHP' => $noHp,
+];
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Ambil Antrian Pasien</title>
+<title>Ambil Antrean Pasien</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-
-<style>
-
-body{
-    font-family:'Poppins',sans-serif;
-    background:linear-gradient(135deg,#2c6bed,#4e8df5);
-    min-height:100vh;
-}
-
-/* ===== CARD ===== */
-
-.main-card{
-    background:rgba(255,255,255,0.12);
-    backdrop-filter:blur(16px);
-    border-radius:24px;
-    border:1px solid rgba(255,255,255,0.2);
-    box-shadow:0 25px 60px rgba(0,0,0,.35);
-    color:white;
-}
-
-/* ===== TITLE ===== */
-
-.page-title{
-    font-size:34px;
-    font-weight:700;
-    letter-spacing:1px;
-}
-
-/* ===== SECTION ===== */
-
-.section-box{
-    background:rgba(255,255,255,0.15);
-    border-radius:18px;
-    padding:18px;
-}
-
-/* ===== FORM ===== */
-
-.form-control,
-.form-select{
-    height:58px;
-    border-radius:14px;
-    font-size:16px;
-}
-
-/* ===== BUTTON ===== */
-
-.btn-main{
-    height:64px;
-    font-size:20px;
-    font-weight:700;
-    border-radius:18px;
-    transition:.25s;
-}
-
-.btn-main:hover{
-    transform:translateY(-2px);
-    box-shadow:0 10px 25px rgba(0,0,0,.3);
-}
-
-/* ===== ALERT BOX ===== */
-
-.info-box{
-    border-radius:14px;
-    padding:14px;
-    font-weight:500;
-}
-
-/* ===== RESPONSIVE ===== */
-
-@media(max-width:768px){
-
-.page-title{
-font-size:26px;
-}
-
-.btn-main{
-font-size:18px;
-}
-
-}
-
-</style>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link href="/anjungan/css/anjungan-theme.css" rel="stylesheet">
 </head>
-<body>
 
+<body class="app-shell">
 
-<div class="container py-5">
+<div class="container shell-container page-narrow">
+    <div class="page-header">
+        <div>
+            <div class="eyebrow">
+                <span class="dot"></span>
+                Lanjutkan ke Antrean
+            </div>
+            <h1 class="page-title">Pilih Poli</h1>
+            <p class="page-subtitle">Pastikan data pasien, pilih poli, lalu pilih dokter.</p>
+        </div>
+    </div>
 
-<div class="row justify-content-center">
+    <section class="glass-panel panel-pad stack-gap">
+        <input type="hidden" id="nik" value="<?= anjungan_escape($nik) ?>">
+        <input type="hidden" id="noka" value="<?= anjungan_escape($noka) ?>">
 
-<div class="col-xl-8 col-lg-10">
+        <div id="infoBox" class="state-banner info">
+            Memeriksa data pasien...
+        </div>
 
-<div class="main-card p-4 p-lg-5">
+        <div id="sectionPasien" class="soft-panel panel-pad d-none">
+            <div class="panel-title">Data Pasien</div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="no_rkm_medis" class="form-label">No. Rekam Medis</label>
+                    <input type="text" id="no_rkm_medis" class="form-control" readonly>
+                </div>
+                <div class="col-md-8">
+                    <label for="nm_pasien" class="form-label">Nama Pasien</label>
+                    <input type="text" id="nm_pasien" class="form-control" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label for="tgl_lahir" class="form-label">Tanggal Lahir</label>
+                    <input type="text" id="tgl_lahir" class="form-control" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label for="jk" class="form-label">Jenis Kelamin</label>
+                    <input type="text" id="jk" class="form-control" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label for="no_peserta" class="form-label">No. BPJS</label>
+                    <input type="text" id="no_peserta" class="form-control" readonly>
+                </div>
+            </div>
+        </div>
 
-<div class="text-center mb-4">
-<div class="page-title">FORM AMBIL ANTRIAN</div>
-<div class="opacity-75">Silakan pilih poli dan dokter yang tersedia</div>
+        <div class="card-grid">
+            <div id="sectionPoli" class="soft-panel panel-pad d-none">
+                <div class="panel-title">Poliklinik</div>
+                <label for="kd_poli" class="form-label">Pilih Poli</label>
+                <select id="kd_poli" class="form-select">
+                    <option value="">Pilih poli</option>
+                </select>
+            </div>
+
+            <div id="sectionDokter" class="soft-panel panel-pad d-none">
+                <div class="panel-title">Dokter</div>
+                <label for="kd_dokter" class="form-label">Pilih Dokter</label>
+                <select id="kd_dokter" class="form-select">
+                    <option value="">Pilih dokter</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="d-grid">
+            <button id="btnSimpan" type="button" class="btn btn-anj-primary d-none">
+                <i class="bi bi-ticket-perforated me-2"></i>
+                Ambil Antrean
+            </button>
+        </div>
+    </section>
 </div>
 
-<!-- HIDDEN -->
-<input type="hidden" id="nik" value="<?= htmlspecialchars($nik) ?>">
-<input type="hidden" id="noka" value="<?= htmlspecialchars($noka) ?>">
-
-<!-- INFO BOX -->
-<div id="infoBox" class="alert alert-info info-box text-center mb-4">
-Memeriksa data pasien...
-</div>
-
-<!-- ================= PASIEN ================= -->
-
-<div id="sectionPasien" class="section-box mb-4 d-none">
-
-<h5 class="mb-3 fw-semibold">Data Pasien</h5>
-
-<div class="row g-3">
-
-<div class="col-md-4">
-<label class="form-label">No RM</label>
-<input type="text" id="no_rkm_medis" class="form-control" readonly>
-</div>
-
-<div class="col-md-8">
-<label class="form-label">Nama Pasien</label>
-<input type="text" id="nm_pasien" class="form-control" readonly>
-</div>
-
-<div class="col-md-4">
-<label class="form-label">Tanggal Lahir</label>
-<input type="text" id="tgl_lahir" class="form-control" readonly>
-</div>
-
-<div class="col-md-4">
-<label class="form-label">Jenis Kelamin</label>
-<input type="text" id="jk" class="form-control" readonly>
-</div>
-
-<div class="col-md-4">
-<label class="form-label">No BPJS</label>
-<input type="text" id="no_peserta" class="form-control" readonly>
-</div>
-
-</div>
-</div>
-
-<!-- ================= POLI ================= -->
-
-<div id="sectionPoli" class="section-box mb-4 d-none">
-
-<h5 class="mb-3 fw-semibold">Pilih Poliklinik</h5>
-
-<select id="kd_poli" class="form-select">
-<option value="">-- Pilih Poli --</option>
-</select>
-
-</div>
-
-<!-- ================= DOKTER ================= -->
-
-<div id="sectionDokter" class="section-box mb-4 d-none">
-
-<h5 class="mb-3 fw-semibold">Pilih Dokter</h5>
-
-<select id="kd_dokter" class="form-select">
-<option value="">-- Pilih Dokter --</option>
-</select>
-
-</div>
-
-<!-- ================= BUTTON ================= -->
-
-<div class="d-grid">
-
-<button id="btnSimpan" class="btn btn-success btn-main d-none">
-Ambil Antrian
-</button>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
 <script>
-let bpjsData = {
-    noKTP: "<?= htmlspecialchars($nik) ?>",
-    noKartu: "<?= htmlspecialchars($noka) ?>",
-    nama: "<?= htmlspecialchars($nama) ?>",
-    tglLahir: "<?= htmlspecialchars($tgl_lahir) ?>",
-    jenisKelamin: "<?= htmlspecialchars($jk) ?>",
-    alamat: "<?= htmlspecialchars($alamat) ?>",
-    noHP: "<?= htmlspecialchars($no_hp ?? '') ?>"
-};
+const bpjsData = <?= json_encode($bpjsPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 </script>
-
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="../../js/ambilAntrian.js"></script>
+<script src="/anjungan/js/ambilAntrian.js"></script>
+
 </body>
 </html>

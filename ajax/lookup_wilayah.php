@@ -1,81 +1,60 @@
 <?php
+declare(strict_types=1);
+
 require_once '../function/configDB.php';
 
-header('Content-Type: application/json');
+$input = anjungan_json_input();
+$level = anjungan_request_value($input, 'level');
+$nama = anjungan_request_value($input, 'nama');
 
-$input = json_decode(file_get_contents("php://input"), true);
-
-$level = $input['level'] ?? '';
-$nama  = trim($input['nama'] ?? '');
-
-if ($nama === '') {
-    echo json_encode(['kd' => 0]);
-    exit;
+if ($level === '' || $nama === '' || strlen($nama) > 160) {
+    anjungan_json(['kd' => 0]);
 }
 
-// =============================
-// MAPPING LEVEL
-// =============================
-switch ($level) {
+$mapping = [
+    'propinsi' => ['table' => 'propinsi', 'code' => 'kd_prop', 'name' => 'nm_prop'],
+    'kabupaten' => ['table' => 'kabupaten', 'code' => 'kd_kab', 'name' => 'nm_kab'],
+    'kecamatan' => ['table' => 'kecamatan', 'code' => 'kd_kec', 'name' => 'nm_kec'],
+    'kelurahan' => ['table' => 'kelurahan', 'code' => 'kd_kel', 'name' => 'nm_kel'],
+];
 
-    case 'propinsi':
-        $table = 'propinsi';
-        $colKd = 'kd_prop';
-        $colNm = 'nm_prop';
-        break;
-
-    case 'kabupaten':
-        $table = 'kabupaten';
-        $colKd = 'kd_kab';
-        $colNm = 'nm_kab';
-        break;
-
-    case 'kecamatan':
-        $table = 'kecamatan';
-        $colKd = 'kd_kec';
-        $colNm = 'nm_kec';
-        break;
-
-    case 'kelurahan':
-        $table = 'kelurahan';
-        $colKd = 'kd_kel';
-        $colNm = 'nm_kel';
-        break;
-
-    default:
-        echo json_encode(['kd' => 0]);
-        exit;
+if (!isset($mapping[$level])) {
+    anjungan_json(['kd' => 0]);
 }
 
-// =============================
-// 1. CARI DULU
-// =============================
-$sql = "SELECT $colKd FROM $table WHERE $colNm = ? LIMIT 1";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("s", $nama);
-$stmt->execute();
-$stmt->bind_result($kd);
-$found = $stmt->fetch();
-$stmt->close();
+$config = $mapping[$level];
 
-// =============================
-// 2. JIKA BELUM ADA → INSERT
-// =============================
-if (!$found) {
-
-    $ins = $conn->prepare(
-        "INSERT INTO $table ($colNm) VALUES (?)"
+try {
+    $sql = sprintf(
+        'SELECT %s FROM %s WHERE %s = ? LIMIT 1',
+        $config['code'],
+        $config['table'],
+        $config['name']
     );
-    $ins->bind_param("s", $nama);
-    $ins->execute();
 
-    $kd = $conn->insert_id;
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('s', $nama);
+    $stmt->execute();
+    $existing = $stmt->get_result()->fetch_assoc();
 
-    $ins->close();
+    if ($existing) {
+        anjungan_json([
+            'level' => $level,
+            'nama' => $nama,
+            'kd' => (int) $existing[$config['code']],
+        ]);
+    }
+
+    $insertSql = sprintf('INSERT INTO %s (%s) VALUES (?)', $config['table'], $config['name']);
+    $insert = $conn->prepare($insertSql);
+    $insert->bind_param('s', $nama);
+    $insert->execute();
+
+    anjungan_json([
+        'level' => $level,
+        'nama' => $nama,
+        'kd' => (int) $conn->insert_id,
+    ]);
+} catch (Throwable $exception) {
+    anjungan_json(['kd' => 0]);
 }
-
-echo json_encode([
-    'level' => $level,
-    'nama'  => $nama,
-    'kd'    => (int)$kd
-]);
